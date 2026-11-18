@@ -1,1 +1,79 @@
-Holacasacerocaja
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Casa Cero · Caja</title>
+<style>
+:root{font-family:system-ui,Arial;color:#17212f;background:#f4f6f9}*{box-sizing:border-box}body{margin:0}header{background:#152d4d;color:white;padding:18px 24px}header h1{margin:0;font-size:23px}main{max-width:1050px;margin:24px auto;padding:0 16px}.card{background:white;border-radius:12px;padding:20px;margin:15px 0;box-shadow:0 2px 12px #0001}h2{margin:0 0 16px;font-size:19px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}label{display:block;font-size:13px;font-weight:600;margin:10px 0 5px}input,select,textarea,button{font:inherit}input,select,textarea{width:100%;padding:11px;border:1px solid #ccd4df;border-radius:8px;background:white}button{background:#165bb3;color:white;border:0;padding:11px 17px;border-radius:8px;cursor:pointer}button.secondary{background:#53677e}button.danger{background:#a12d35}button:disabled{opacity:.5;cursor:default}.actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:15px}.muted{color:#617086;font-size:13px}.error{color:#a12d35}.success{color:#176c3c}.stat{font-size:24px;font-weight:700}table{width:100%;border-collapse:collapse;font-size:14px}th,td{padding:10px;border-bottom:1px solid #e7eaf0;text-align:left}th{background:#f5f7fa}.scroll{overflow:auto}[hidden]{display:none!important}#status{margin:10px 0}small{font-size:12px}
+</style></head><body>
+<header><h1>Casa Cero · Sistema de caja</h1><small>Registro de ingresos y egresos</small></header>
+<main>
+<section class="card" id="setup" hidden><h2>Falta conectar Firebase</h2><p>La página está instalada, pero necesita los datos de configuración de Firebase para funcionar. No ingreses contraseñas en el código.</p></section>
+<section class="card" id="loginCard"><h2>Ingresar</h2><form id="loginForm"><label>Correo electrónico</label><input id="email" type="email" required autocomplete="username"><label>Contraseña</label><input id="password" type="password" required autocomplete="current-password"><div class="actions"><button>Entrar</button></div></form></section>
+<div id="app" hidden>
+<div class="actions"><span id="signedIn" class="muted"></span><button id="logout" class="secondary">Salir</button></div>
+<section class="card"><h2>Nuevo movimiento</h2>
+<form id="movementForm"><div class="grid">
+<div><label>Local</label><select id="local" required><option>Casa Cero</option><option>Mega Electrónica</option></select></div>
+<div><label>Tipo</label><select id="tipo"><option>Ingreso</option><option>Egreso</option></select></div>
+<div><label>Rubro</label><select id="rubro"><option>Controles TV</option><option>Controles aire</option><option>Controles portones</option><option>Impresión 3D</option><option>Reparaciones</option><option>Otros</option></select></div>
+<div><label>Medio de pago</label><select id="medio"><option>Efectivo</option><option>Mercado Pago</option><option>Débito</option><option>Crédito</option><option>Transferencia</option><option>Cuenta corriente</option><option>Seña</option></select></div>
+<div><label>Monto en ARS</label><input id="monto" type="number" min="0.01" step="0.01" required placeholder="0,00"></div>
+<div><label>Usuario</label><select id="usuario"><option>Pablo</option><option>Marcos</option><option>Mariano</option><option>Gabriel</option><option>Luciano</option></select></div>
+<div><label>N.º de orden de reparación (opcional)</label><input id="orden" placeholder="OR"></div>
+<div><label>Descripción</label><input id="descripcion" required placeholder="Producto o concepto"></div>
+</div><label>Observación (opcional)</label><textarea id="observacion" rows="2"></textarea><div class="actions"><button id="save">Guardar movimiento</button><span class="muted">Fecha y hora automáticas</span></div></form>
+</section>
+<section class="card"><h2>Movimientos</h2><div class="grid">
+<div><label>Filtrar por local</label><select id="fLocal"><option value="">Todos</option><option>Casa Cero</option><option>Mega Electrónica</option></select></div>
+<div><label>Desde</label><input type="date" id="desde"></div><div><label>Hasta</label><input type="date" id="hasta"></div>
+</div><div class="grid" style="margin-top:18px"><div><div class="muted">Ingresos</div><div class="stat" id="ingresos">$ 0</div></div><div><div class="muted">Egresos</div><div class="stat" id="egresos">$ 0</div></div><div><div class="muted">Saldo</div><div class="stat" id="saldo">$ 0</div></div></div>
+<div class="actions"><button id="csv" type="button" class="secondary">Exportar CSV</button></div><div class="scroll"><table><thead><tr><th>Fecha</th><th>Local</th><th>Tipo</th><th>Rubro</th><th>Descripción</th><th>Medio</th><th>Usuario</th><th>OR</th><th>Monto</th><th>Acción</th></tr></thead><tbody id="rows"></tbody></table></div></section>
+</div><p id="status" role="status"></p>
+</main>
+<script type="module">
+import {initializeApp} from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+import {getAuth,onAuthStateChanged,signInWithEmailAndPassword,signOut} from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
+import {getFirestore,collection,addDoc,query,orderBy,onSnapshot,serverTimestamp,deleteDoc,doc} from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
+// REEMPLAZAR ESTE BLOQUE POR EL firebaseConfig COPIADO DESDE FIREBASE:
+const firebaseConfig = {
+  apiKey: "PEGAR_API_KEY",
+  authDomain: "ccsistema.firebaseapp.com",
+  projectId: "ccsistema",
+  storageBucket: "ccsistema.firebasestorage.app",
+  messagingSenderId: "PEGAR_MESSAGING_SENDER_ID",
+  appId: "PEGAR_APP_ID"
+};
+const $=id=>document.getElementById(id);
+const msg=(s,err=false)=>{ $('status').textContent=s; $('status').className=err?'error':'success';};
+const money=n=>new Intl.NumberFormat('es-AR',{style:'currency',currency:'ARS'}).format(n||0);
+const formatDate=d=>d?.toDate?d.toDate().toLocaleString('es-AR'):'Pendiente';
+let auth,db,unsubscribe,items=[],currentUser;
+const configured=!Object.values(firebaseConfig).some(v=>String(v).startsWith('PEGAR_'));
+if(!configured){$('setup').hidden=false;$('loginCard').hidden=true;msg('Falta completar la configuración de Firebase.',true);}
+else {
+ try{
+ const firebaseApp=initializeApp(firebaseConfig);auth=getAuth(firebaseApp);db=getFirestore(firebaseApp);
+ onAuthStateChanged(auth,u=>{
+ currentUser=u;$('loginCard').hidden=!!u;$('app').hidden=!u;$('signedIn').textContent=u?u.email:'';
+ if(unsubscribe){unsubscribe();unsubscribe=null;}
+ if(u){unsubscribe=onSnapshot(query(collection(db,'movimientos'),orderBy('fecha','desc')),snap=>{items=snap.docs.map(d=>({id:d.id,...d.data()}));render();msg('Conectado a Firebase.');},e=>msg('Error al leer movimientos: '+e.message,true));}
+ });
+ }catch(e){msg('Error de configuración: '+e.message,true);}
+}
+$('loginForm').onsubmit=async e=>{e.preventDefault();try{await signInWithEmailAndPassword(auth,$('email').value.trim(),$('password').value);$('password').value='';msg('Sesión iniciada.');}catch(e){msg('No se pudo iniciar sesión. Revisá correo y contraseña.',true);}};
+$('logout').onclick=()=>signOut(auth);
+$('movementForm').onsubmit=async e=>{
+ e.preventDefault();if(!currentUser)return;const btn=$('save');btn.disabled=true;
+ try{await addDoc(collection(db,'movimientos'),{local:$('local').value,tipo:$('tipo').value,rubro:$('rubro').value,medio:$('medio').value,monto:Number($('monto').value),usuario:$('usuario').value,orden:$('orden').value.trim(),descripcion:$('descripcion').value.trim(),observacion:$('observacion').value.trim(),fecha:serverTimestamp(),creadoPor:currentUser.uid});$('monto').value='';$('orden').value='';$('descripcion').value='';$('observacion').value='';msg('Movimiento guardado.');}
+ catch(err){msg('No se pudo guardar: '+err.message,true);}finally{btn.disabled=false;}
+};
+const filtered=()=>items.filter(x=>{const d=x.fecha?.toDate?.();const date=d?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`:'';return (!$('fLocal').value||x.local===$('fLocal').value)&&(!$('desde').value||date>=$('desde').value)&&(!$('hasta').value||date<=$('hasta').value);});
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function render(){
+ const data=filtered();let ins=0,outs=0;for(const x of data){if(x.tipo==='Ingreso')ins+=Number(x.monto)||0;else outs+=Number(x.monto)||0;}
+ $('ingresos').textContent=money(ins);$('egresos').textContent=money(outs);$('saldo').textContent=money(ins-outs);
+ $('rows').innerHTML=data.map(x=>`<tr><td>${esc(formatDate(x.fecha))}</td><td>${esc(x.local)}</td><td>${esc(x.tipo)}</td><td>${esc(x.rubro)}</td><td title="${esc(x.observacion)}">${esc(x.descripcion)}</td><td>${esc(x.medio)}</td><td>${esc(x.usuario)}</td><td>${esc(x.orden)}</td><td>${money(x.monto)}</td><td><button class="danger" data-delete="${esc(x.id)}">Borrar</button></td></tr>`).join('')||'<tr><td colspan="10">Sin movimientos</td></tr>';
+}
+for(const id of ['fLocal','desde','hasta'])$(id).onchange=render;
+$('rows').onclick=async e=>{const id=e.target.dataset.delete;if(!id||!confirm('¿Eliminar este movimiento?'))return;try{await deleteDoc(doc(db,'movimientos',id));msg('Movimiento eliminado.');}catch(err){msg(err.message,true);}};
+$('csv').onclick=()=>{const data=filtered();const cols=['fecha','local','tipo','rubro','descripcion','medio','usuario','orden','observacion','monto'];const csv=[cols.join(';'),...data.map(x=>cols.map(k=>{const v=k==='fecha'?formatDate(x.fecha):x[k]??'';return '"'+String(v).replace(/"/g,'""')+'"';}).join(';'))].join('\r\n');const blob=new Blob(['\ufeff',csv],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='casa-cero-movimientos.csv';a.click();URL.revokeObjectURL(a.href);};
+</script></body></html>
